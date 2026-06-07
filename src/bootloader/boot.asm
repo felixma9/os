@@ -31,7 +31,63 @@ ebr_system_id:              db 'FAT12   '
 
 
 start:
-    jmp main
+    ; setup data segments
+    mov ax, 0
+    mov ds, ax
+    mov es, ax
+
+    ; setup stack
+    mov ss, ax
+    mov sp, 0x7C00
+
+    ; some BIOSes might start at 0x7C0:0000 instead of 0000:0x7C0, so make sure
+    ; we are in the expected location
+    push es
+    push word .after
+    retf
+
+.after:
+    ; read something from floppy disk
+    ; BIOS should set dl to drive number
+    mov [ebr_drive_number], dl
+
+    ;show loading message
+    mov si, msg_loading
+    call puts
+
+    ; read drive parameters
+    push es
+    mov ah, 08h
+    int 13h
+    jc floppy_error
+    pop es
+
+    and cl, 0x3F                        ; remove top 2 bits
+    xor ch, ch
+    mov [bdb_sectors_per_track], cx     ; sector count
+
+    inc dh
+    mov [bdb_heads], dh                 ; head count
+
+    ; read FAT root directory
+    ; --- TO BE IMPLEMENTED BASED ON fat.c ---
+
+    cli          ; disable interrupts before halting
+    hlt
+
+floppy_error:
+    mov si, msg_read_failed
+    call puts
+    jmp wait_key_and_reboot
+
+wait_key_and_reboot:
+    mov ah, 0
+    int 16h      ; wait for key press
+    jmp 0FFFFh:0 ; reboot by jumping to the reset vector
+
+.halt:
+    cli          ; disable interrupts
+    hlt
 
 ; Prints a string to the screen
 ; Params:
@@ -58,47 +114,6 @@ puts:
     pop ax
     pop si      ; restore the registers that puts modified
     ret
-
-main:
-    ; setup data segments
-    mov ax, 0
-    mov ds, ax
-    mov es, ax
-
-    ; setup stack
-    mov ss, ax
-    mov sp, 0x7C00
-
-    ; read something from floppy disk
-    ; BIOS should set dl to drive number
-    mov [ebr_drive_number], dl
-
-    mov ax, 1        ; LBA address to read from, second sector in this case
-    mov cl, 1        ; number of sectors to read
-    mov bx, 0x7E00   ; memory address to read into, should be after bootloader
-    call disk_read
-
-
-    ; load si with address of string
-    mov si, msg_hello
-    call puts
-
-    cli          ; disable interrupts before halting
-    hlt
-
-floppy_error:
-    mov si, msg_read_failed
-    call puts
-    jmp wait_key_and_reboot
-
-wait_key_and_reboot:
-    mov ah, 0
-    int 16h      ; wait for key press
-    jmp 0FFFFh:0 ; reboot by jumping to the reset vector
-
-.halt:
-    cli          ; disable interrupts
-    hlt
 
 ; Disk routines
 
@@ -179,7 +194,7 @@ disk_read:
     jnz .retry          ; if di != 0, retry
 
 .fail:
-    ; If we get here all attemps were exhausted
+    ; If we get here all attempts were exhausted
     jmp floppy_error
 
 .done:
@@ -205,7 +220,7 @@ disk_reset:
     ret
 
  
-msg_hello: db "Hello world!", ENDL, 0
+msg_loading: db "Loading...", ENDL, 0
 msg_read_failed: db 'Failed to read from disk', ENDL, 0
 
 times 510-($-$$) db 0
