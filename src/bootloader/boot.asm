@@ -3,9 +3,20 @@ bits 16
 
 %define ENDL 0x0D, 0x0A
 
+; Reference the BPB table at https://wiki.osdev.org/FAT 
+
 ; FAT12 header
-jmp short start
-nop
+jmp short start     ; 2 bytes
+nop                 ; 1 byte
+
+; FAT specs say use the first 3 bytes to jump over the table
+
+; We're now at offset 3 bytes into the disk, this is where fields are declared
+
+; db = define byte,       1 byte, used for strings, "use one byte per char"
+; dw = define word,       2 bytes
+; dd = define doubleword, 4 bytes
+
 
 bdb_oem:                    db "NBOS    " ; OEM name, 8 bytes
 bdb_bytes_per_sector:       dw 512
@@ -28,7 +39,7 @@ ebr_volume_id:              db 12h, 34h, 56h, 78h
 ebr_volume_label:           db 'FELIX OS   '
 ebr_system_id:              db 'FAT12   '
 
-
+; At this point, we are at offset 62, where 448 bytes are used as the boot code
 
 start:
     ; setup data segments
@@ -224,4 +235,6 @@ msg_loading: db "Loading...", ENDL, 0
 msg_read_failed: db 'Failed to read from disk', ENDL, 0
 
 times 510-($-$$) db 0
+; The specs say to put the below magic number at offset 510, so
+; we pad until we read 510 and then emit the magic number
 dw 0AA55h
