@@ -23,7 +23,7 @@ bdb_bytes_per_sector:       dw 512
 bdb_sectors_per_cluster:    db 1
 bdb_reserved_sectors:       dw 1
 bdb_fat_count:              db 2
-dbd_dir_entries_count:      dw 0E0h
+bdb_dir_entries_count:      dw 0E0h
 bdb_total_sectors:          dw 2880
 bdb_media_descriptor_type:  db 0F0h
 bdb_sectors_per_fat:        dw 9
@@ -62,7 +62,7 @@ start:
     ; BIOS should set dl to drive number
     mov [ebr_drive_number], dl
 
-    ;show loading message
+    ; show loading message
     mov si, msg_loading
     call puts
 
@@ -73,7 +73,10 @@ start:
     jc floppy_error
     pop es
 
-    and cl, 0x3F                        ; remove top 2 bits
+    ; the BIOS 'asks the hardware' for the shape of the drive
+    ;       returns sectors_per_track and heads in cl and dh respectively
+    ;       replace our hardcoded values with these dynamic values
+    and cl, 0x3F                        ; remove top 2 bits, since sectors_per_track shares cl with overflow bits
     xor ch, ch
     mov [bdb_sectors_per_track], cx     ; sector count
 
@@ -81,13 +84,139 @@ start:
     mov [bdb_heads], dh                 ; head count
 
     ; read FAT root directory
-    ; --- TO BE IMPLEMENTED BASED ON fat.c ---
+    ; compute lba of root dir in sectors, reserved + fats * sectors_per_fat
+    ; this section can be hardcoded
+    mov ax, [bdb_sectors_per_fat]       
+    mov bl, [bdb_fat_count]
+    xor bh, bh                          ; bdb_fat_count is only 1 word, bh could be junk; reset bh to be safe
+    mul bx                              ; dx:ax = ax * bx, ax = (fats * sectors_per_fat)
+    add ax, word [bdb_reserved_sectors]      ; ax += reserved_sectors, ax = lba of root dir
+    push ax
+
+    ; compute size of root dir in sectors = (32 * number_of_entries) / bytes_per_sector
+    mov ax, [bdb_dir_entries_count]
+    shl ax, 5                           ; ax *= 32
+    xor dx, dx                          ; dx = 0
+    div word [bdb_bytes_per_sector]     ; number of sectors to read, divide dx:ax by operand, quotient -> ax, remainder -> dx
+
+    test dx, dx                         ; if dx (remainder) != 0, add 1
+    jz .root_dir_after
+    inc ax                              ; dvision remainder != 0, add 1
+                                        ; this means we have a sector only partially filled with entries
+.root_dir_after:
+    ; read root directory
+    mov cl, al                          ; cl = number of sectors to read = size of root dir
+    pop ax                              ; lba of root dir
+    mov dl, [ebr_drive_number]          ; dl = drive number
+    mov bx, buffer                      ; es:bx = offset
+    call disk_read
+
+    ; search for kernel.bin
+    xor bx, bx
+    mov di, buffer
+
+.search_kernel:
+    mov si, file_kernel_bin
+    mov cx, 11                          ; compare up to 11 chars
+    push di
+    repe cmpsb                          ; compare string bytes, compare two bytes
+                                        ;   repe = repeat while equal or until cx reaches 0, cx decremented each time
+                                        ;   one in ds:si, other in es:di
+    pop di
+    je .found_kernel
+
+    add di, 32                          ; jump di to next directory
+    inc bx
+    cmp bx, [bdb_dir_entries_count]     ; bx = how many files we've checked, see if we've checked all
+    jl .search_kernel
+
+    ; if we make it here, kernel was not found
+    jmp kernel_not_found_error
+
+.found_kernel:
+
+    ; di points to dir entry
+    mov ax, [di + 26]                   ; offset di into entry to get first cluster (refer to fat12 docs)
+    mov [kernel_cluster], ax
+
+    ; read the FAT table
+    mov ax, [bdb_reserved_sectors]
+    mov bx, buffer
+    mov cl, [bdb_sectors_per_fat]
+    mov dl, [ebr_drive_number]
+    call disk_read
+
+    ; read kernel and process FAT chain
+    mov bx, KERNEL_LOAD_SEGMENT
+    mov es, bx
+    mov bx, KERNEL_LOAD_OFFSET
+
+.load_kernel_loop:
+    
+    ; read next cluster
+    mov ax, [kernel_cluster]
+
+    ; --- hardcoded, fix later ---
+    add ax, 31                          ; first cluster = (kernel_cluster - 2) * sectors_per_clister + start_sector
+                                        ; start sector = reserved + fats + root_dir_size = 1 + 18 + 134 = 33
+    mov cl, 1
+    mov dl, [ebr_drive_number]
+    call disk_read
+
+    add bx, [bdb_bytes_per_sector]
+
+    ; compute location of next cluster
+    mov ax, [kernel_cluster]
+    mov cx, 3
+    mul cx
+    mov cx, 2
+    div cx                              ; ax = index of entry in FAT, dx = cluster mod 2
+
+    mov si, buffer
+    add si, ax
+    mov ax, [ds:si]                     ; read entry from FAT table at index ax
+
+    or dx, dx
+    jz .even
+
+.odd:
+    shr ax, 4
+    jmp .next_cluster_after
+
+.even:
+    and ax, 0x0FFF
+
+.next_cluster_after:
+    cmp ax, 0x0FF8                      ; in FAT, 0xFF8 indicates end of file chain
+    jae .read_finish
+
+    mov [kernel_cluster], ax
+    jmp .load_kernel_loop
+
+.read_finish:
+    ; boot device in dl
+    mov dl, [ebr_drive_number]
+
+    ; set segment registers
+    mov ax, KERNEL_LOAD_SEGMENT
+    mov ds, ax
+    mov es, ax
+
+    jmp KERNEL_LOAD_SEGMENT:KERNEL_LOAD_OFFSET
+
+    ; should never reach here
+    jmp wait_key_and_reboot
 
     cli          ; disable interrupts before halting
     hlt
 
 floppy_error:
     mov si, msg_read_failed
+    call puts
+    jmp wait_key_and_reboot
+
+kernel_not_found_error:
+    mov si, msg_kernel_not_found
     call puts
     jmp wait_key_and_reboot
 
@@ -231,10 +360,18 @@ disk_reset:
     ret
 
  
-msg_loading: db "Loading...", ENDL, 0
-msg_read_failed: db 'Failed to read from disk', ENDL, 0
+msg_loading:          db 'Loading...', ENDL, 0
+msg_read_failed:      db 'Failed to read from disk', ENDL, 0
+msg_kernel_not_found: db 'STAGE2.BIN file not found!'
+file_kernel_bin:      db 'STAGE2  BIN'
+kernel_cluster:       dw 0
+
+KERNEL_LOAD_SEGMENT   equ 0x2000
+KERNEL_LOAD_OFFSET    equ 0
 
 times 510-($-$$) db 0
 ; The specs say to put the below magic number at offset 510, so
 ; we pad until we read 510 and then emit the magic number
 dw 0AA55h
+
+buffer:

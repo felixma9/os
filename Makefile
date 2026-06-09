@@ -19,23 +19,28 @@ $(BUILD_DIR)/main_floppy.img: bootloader kernel
 #	Now we replace the first sector (512 bytes) with our own bootloader; note that the FAT BPB (BIOS Parameter
 # 	Block) has been overwritten, so we need to match the FAT format exactly to preserve FAT functionality
 #	that's why we write out the FAT values from the specs
-	dd if=$(BUILD_DIR)/bootloader.bin of=$(BUILD_DIR)/main_floppy.img conv=notrunc
+	dd if=$(BUILD_DIR)/stage1.bin of=$(BUILD_DIR)/main_floppy.img conv=notrunc
 #	Since the floppy is already FAT12, when we copy in files, they are correctly stored in the data section,
 #	and directory entries are correctly created in the root directory
+	mcopy -i $(BUILD_DIR)/main_floppy.img $(BUILD_DIR)/stage2.bin "::stage2.bin"
 	mcopy -i $(BUILD_DIR)/main_floppy.img $(BUILD_DIR)/kernel.bin "::kernel.bin"
 	mcopy -i $(BUILD_DIR)/main_floppy.img test.txt "::test.txt"
 
 # Bootloader
-bootloader: $(BUILD_DIR)/bootloader.bin
+bootloader: stage1 stage2
 
-$(BUILD_DIR)/bootloader.bin: always
-	$(ASM) $(SRC_DIR)/bootloader/boot.asm -f bin -o $(BUILD_DIR)/bootloader.bin
+stage1: $(BUILD_DIR)/stage1.bin
+$(BUILD_DIR)/stage1.bin: always
+	$(MAKE) -C $(SRC_DIR)/bootloader/stage1 BUILD_DIR=$(abspath $(BUILD_DIR))
+
+stage2: $(BUILD_DIR)/stage2.bin
+$(BUILD_DIR)/stage2.bin: always
+	$(MAKE) -C $(SRC_DIR)/bootloader/stage2 BUILD_DIR=$(abspath $(BUILD_DIR))
 
 # Kernel
 kernel: $(BUILD_DIR)/kernel.bin
-
 $(BUILD_DIR)/kernel.bin: always
-	$(ASM) $(SRC_DIR)/kernel/main.asm -f bin -o $(BUILD_DIR)/kernel.bin
+	$(MAKE) -C $(SRC_DIR)/kernel BUILD_DIR=$(abspath $(BUILD_DIR))
 
 # Always
 always:
@@ -43,6 +48,9 @@ always:
 
 # Clean
 clean:
+	$(MAKE) -C $(SRC_DIR)/bootloader/stage1 BUILD_DIR=$(abspath $(BUILD_DIR)) clean
+	$(MAKE) -C $(SRC_DIR)/bootloader/stage2 BUILD_DIR=$(abspath $(BUILD_DIR)) clean
+	$(MAKE) -C $(SRC_DIR)/kernel BUILD_DIR=$(abspath $(BUILD_DIR)) clean
 	rm -rf $(BUILD_DIR)/*
 
 # Run macro
@@ -51,7 +59,6 @@ run:
 
 # Build tools
 tools_fat: $(BUILD_DIR)/tools/fat
-
 $(BUILD_DIR)/tools/fat: always $(TOOLS_DIR)/fat/fat.c
 	mkdir -p $(BUILD_DIR)/tools
 	gcc -g -o $(BUILD_DIR)/tools/fat $(TOOLS_DIR)/fat/fat.c
