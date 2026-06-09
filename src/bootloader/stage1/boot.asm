@@ -116,7 +116,7 @@ start:
     mov di, buffer
 
 .search_kernel:
-    mov si, file_kernel_bin
+    mov si, file_stage2_bin
     mov cx, 11                          ; compare up to 11 chars
     push di
     repe cmpsb                          ; compare string bytes, compare two bytes
@@ -137,7 +137,7 @@ start:
 
     ; di points to dir entry
     mov ax, [di + 26]                   ; offset di into entry to get first cluster (refer to fat12 docs)
-    mov [kernel_cluster], ax
+    mov [stage2_cluster], ax
 
     ; read the FAT table
     mov ax, [bdb_reserved_sectors]
@@ -154,10 +154,10 @@ start:
 .load_kernel_loop:
     
     ; read next cluster
-    mov ax, [kernel_cluster]
+    mov ax, [stage2_cluster]
 
     ; --- hardcoded, fix later ---
-    add ax, 31                          ; first cluster = (kernel_cluster - 2) * sectors_per_clister + start_sector
+    add ax, 31                          ; first cluster = (stage2_cluster - 2) * sectors_per_clister + start_sector
                                         ; start sector = reserved + fats + root_dir_size = 1 + 18 + 134 = 33
     mov cl, 1
     mov dl, [ebr_drive_number]
@@ -166,7 +166,7 @@ start:
     add bx, [bdb_bytes_per_sector]
 
     ; compute location of next cluster
-    mov ax, [kernel_cluster]
+    mov ax, [stage2_cluster]
     mov cx, 3
     mul cx
     mov cx, 2
@@ -190,7 +190,7 @@ start:
     cmp ax, 0x0FF8                      ; in FAT, 0xFF8 indicates end of file chain
     jae .read_finish
 
-    mov [kernel_cluster], ax
+    mov [stage2_cluster], ax
     jmp .load_kernel_loop
 
 .read_finish:
@@ -363,8 +363,8 @@ disk_reset:
 msg_loading:          db 'Loading...', ENDL, 0
 msg_read_failed:      db 'Failed to read from disk', ENDL, 0
 msg_kernel_not_found: db 'STAGE2.BIN file not found!'
-file_kernel_bin:      db 'STAGE2  BIN'
-kernel_cluster:       dw 0
+file_stage2_bin:      db 'STAGE2  BIN'
+stage2_cluster:       dw 0
 
 KERNEL_LOAD_SEGMENT   equ 0x2000
 KERNEL_LOAD_OFFSET    equ 0
