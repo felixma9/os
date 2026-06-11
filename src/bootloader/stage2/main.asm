@@ -7,8 +7,11 @@ global entry
 
 entry:
     cli
-    mov ax, dx
+    mov ax, cs
+    mov ds, ax
     mov ss, ax
+    ; mov ax, dx
+    ; mov ss, ax
     mov sp, 0
     mov bp, sp
     sti
