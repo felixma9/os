@@ -1,6 +1,10 @@
 #include "stdio.h"
 #include "x86.h"
 
+// By default, watcom wcc compiler places this code into the _TEXT class=CODE
+// section of final output binary
+// No need to declare section... like in the .asm files
+
 void _cdecl putc(char c) {
     x86_Video_WriteCharTeletype(c, 0);
 }
@@ -29,7 +33,7 @@ int* _cdecl printf_number(int* argp, int length, bool sign, int radix);
 void _cdecl printf(const char* fmt, ...) {
     // argp points to the next arg to evaluate
     //      int* since int is 2 bytes, and in 16bit real mode all args
-    //      are pushed to the stack as 2 bytes
+    //      are pushed to the stack taking AT LEAST 2 bytes (some take more)
     int* argp = (int*) &fmt;
     int state = PRINTF_STATE_NORMAL;
     int length = PRINTF_LENGTH_DEFAULT;

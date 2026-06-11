@@ -43,6 +43,7 @@ ebr_system_id:              db 'FAT12   '
 
 start:
     ; setup data segments
+    ; we want to be at segment 0!
     mov ax, 0
     mov ds, ax
     mov es, ax
@@ -51,8 +52,22 @@ start:
     mov ss, ax
     mov sp, 0x7C00
 
-    ; some BIOSes might start at 0x7C0:0000 instead of 0000:0x7C0, so make sure
+    ; some BIOSes might start at 0x7C0:0000 instead of 0000:0x7C00, so make sure
     ; we are in the expected location
+    
+    ; in 16b real mode, addresses are NOT segment:offset
+    ; they are segment * 16 + offset
+    ; therefore, when the BIOS this into memory, it can do so at either:
+    ;       0x7c0:0000, or 0000:0x7c00
+    ; we want the second option, since we have 'org 0x7c00', which means that labels 
+    ; in this file will have an offset of 0x7c00 applied to them
+    ;       if we had the first option, then a label of 0x7c08 would be calculated as:
+    ;           0x7c0 * 16 + 0x7c08 -> goes way off into random memory
+
+    ; retf pops 2 values off the stack, ip and then cs
+    ; therefore, we can load the cs:ip with whatever we want
+    ; we manually set cs to 0x0000, and ip to .after, which we then jump to
+    ;       note that near jump only changes ip
     push es
     push word .after
     retf
@@ -88,7 +103,7 @@ start:
     ; this section can be hardcoded
     mov ax, [bdb_sectors_per_fat]       
     mov bl, [bdb_fat_count]
-    xor bh, bh                          ; bdb_fat_count is only 1 word, bh could be junk; reset bh to be safe
+    xor bh, bh                          ; bdb_fat_count is only 1 byte, bh could be junk; reset bh to be safe
     mul bx                              ; dx:ax = ax * bx, ax = (fats * sectors_per_fat)
     add ax, word [bdb_reserved_sectors]      ; ax += reserved_sectors, ax = lba of root dir
     push ax
@@ -111,7 +126,7 @@ start:
     mov bx, buffer                      ; es:bx = offset
     call disk_read
 
-    ; search for kernel.bin
+    ; search for stage2.bin
     xor bx, bx
     mov di, buffer
 
@@ -123,7 +138,7 @@ start:
                                         ;   repe = repeat while equal or until cx reaches 0, cx decremented each time
                                         ;   one in ds:si, other in es:di
     pop di
-    je .found_kernel
+    je .found_stage2
 
     add di, 32                          ; jump di to next directory
     inc bx
@@ -133,7 +148,7 @@ start:
     ; if we make it here, kernel was not found
     jmp kernel_not_found_error
 
-.found_kernel:
+.found_stage2:
 
     ; di points to dir entry
     mov ax, [di + 26]                   ; offset di into entry to get first cluster (refer to fat12 docs)
@@ -147,18 +162,19 @@ start:
     call disk_read
 
     ; read kernel and process FAT chain
-    mov bx, KERNEL_LOAD_SEGMENT
+    mov bx, STAGE2_LOAD_SEGMENT
     mov es, bx
-    mov bx, KERNEL_LOAD_OFFSET
+    mov bx, STAGE2_LOAD_OFFSET
 
 .load_kernel_loop:
-    
+    ; at this point we've found the starting address of stage2
+
     ; read next cluster
     mov ax, [stage2_cluster]
 
     ; --- hardcoded, fix later ---
     add ax, 31                          ; first cluster = (stage2_cluster - 2) * sectors_per_clister + start_sector
-                                        ; start sector = reserved + fats + root_dir_size = 1 + 18 + 134 = 33
+                                        ; start sector = reserved + fats + root_dir_size = 1 + 18 + 14 = 33
     mov cl, 1
     mov dl, [ebr_drive_number]
     call disk_read
@@ -198,11 +214,12 @@ start:
     mov dl, [ebr_drive_number]
 
     ; set segment registers
-    mov ax, KERNEL_LOAD_SEGMENT
+    mov ax, STAGE2_LOAD_SEGMENT
     mov ds, ax
     mov es, ax
 
-    jmp KERNEL_LOAD_SEGMENT:KERNEL_LOAD_OFFSET
+    ; stage2 loaded into RAM, directly jump there
+    jmp STAGE2_LOAD_SEGMENT:STAGE2_LOAD_OFFSET
 
     ; should never reach here
     jmp wait_key_and_reboot
@@ -216,7 +233,7 @@ floppy_error:
     jmp wait_key_and_reboot
 
 kernel_not_found_error:
-    mov si, msg_kernel_not_found
+    mov si, msg_stage2_not_found
     call puts
     jmp wait_key_and_reboot
 
@@ -362,12 +379,13 @@ disk_reset:
  
 msg_loading:          db 'Loading...', ENDL, 0
 msg_read_failed:      db 'Failed to read from disk', ENDL, 0
-msg_kernel_not_found: db 'STAGE2.BIN file not found!'
+msg_stage2_not_found: db 'STAGE2.BIN file not found!'
 file_stage2_bin:      db 'STAGE2  BIN'
 stage2_cluster:       dw 0
 
-KERNEL_LOAD_SEGMENT   equ 0x2000
-KERNEL_LOAD_OFFSET    equ 0
+; Once stage2.bin is found, we want to load it it to 0x2000:0000
+STAGE2_LOAD_SEGMENT   equ 0x2000
+STAGE2_LOAD_OFFSET    equ 0
 
 times 510-($-$$) db 0
 ; The specs say to put the below magic number at offset 510, so
