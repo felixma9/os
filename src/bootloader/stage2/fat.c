@@ -139,12 +139,13 @@ FAT_File far* FAT_OpenEntry(DISK* disk, FAT_DirectoryEntry* entry) {
     for (int i = 0; i < MAX_FILE_HANDLES; ++i) {
         if (!g_Data->OpenedFiles[i].Opened) {
             handle = i;
+            break;
         }
     }
 
     if (handle < 0) {
         printf("FAT: out of file handles\r\n");
-        return false;
+        return NULL;
     }
 
     // Init variables
@@ -152,13 +153,16 @@ FAT_File far* FAT_OpenEntry(DISK* disk, FAT_DirectoryEntry* entry) {
     fd->Public.Handle = handle;
     fd->Public.isDirectory = (entry->Attributes & FAT_ATTRIBUTE_DIRECTORY) != 0;
     fd->Public.Position = 0;
-    fd->Public.Size = 0;
+    fd->Public.Size = entry->Size;
+
+    fd->Opened = true;
     fd->FirstCluster = entry->FirstClusterLow + ((uint32_t)entry->FirstClusterHigh << 16);
     fd->CurrentCluster = fd->FirstCluster;
+    fd->CurrentSectorInCluster = 0;
 
     if (!DISK_ReadSectors(disk, FAT_ClusterToLba(fd->CurrentCluster), 1, fd->Buffer)) {
         printf("FAT: read error\r\n");
-        return false;
+        return NULL;
     }
 
     return fd;
