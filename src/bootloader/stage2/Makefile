@@ -4,7 +4,7 @@ ASMFLAGS?=-f obj
 
 # use windows watcom installation
 CC16?=/mnt/c/WATCOM/binnt64/wcc.exe
-CFLAGS16?=-4 -d3 -s -wx -ms -zl -zq
+CFLAGS16?=-4 -d3 -s -wx -ms -zl -zq -za99
 LD16?=/mnt/c/WATCOM/binnt64/wlink.exe
 
 # convert unix path to windows path for watcom

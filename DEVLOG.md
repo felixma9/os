@@ -4,6 +4,257 @@ A running log of what was built, what broke, and what clicked.
 
 ---
 
+## 2026-06-21 — LBA formulas, disk order vs. RAM order, and a map of the FAT driver's memory
+
+### LBA formulas, gathered in one place
+
+Cluster → LBA (`FAT_ClusterToLba`):
+
+```
+LBA = DataSectionLba + (cluster - 2) * SectorsPerCluster
+```
+
+The `-2` exists because FAT cluster numbering starts at `2` — clusters `0` and `1` are reserved by the spec, so cluster `2` is the first real data cluster and maps to `DataSectionLba + 0`.
+
+A specific sector within that cluster:
+
+```c
+uint32_t lba = FAT_ClusterToLba(fd->CurrentCluster) + fd->CurrentSectorInCluster;
+```
+
+Root directory LBA (fixed, no cluster math — root isn't cluster-based):
+
+```
+rootDirLba = ReservedSectors + SectorsPerFat * FatCount
+```
+
+FAT12's 12-bit packed entry lookup (same math as `boot.asm`, needed for following a subdirectory's cluster chain):
+
+```
+byteIndex   = (cluster * 3) / 2
+entry16     = *(uint16_t far*)(g_Fat + byteIndex)
+nextCluster = (cluster % 2 == 0) ? (entry16 & 0x0FFF) : (entry16 >> 4)
+```
+
+### Disk layout order ≠ RAM layout order
+
+On disk, FAT tables come before the root directory (confirmed by the floppy layout in the README: reserved sector → FAT #1 → FAT #2 → root dir → data clusters), and `FAT_Initialize`'s read order matches that.
+
+But where things land *in RAM* is a separate, unrelated decision. This driver places `FAT_Data` (which contains the root directory's buffer as a member) first in the fixed `MEMORY_FAT_ADDR` region, and the FAT table (`g_Fat`) right after it — the reverse of the on-disk order. That's fine: reading sectors off disk in one order and placing the bytes in RAM in a different order are independent operations: nothing requires them to match.
+
+### Map of the FAT driver's memory region
+
+```
+0x00000 ┌─────────────────────────────────┐
+        │ Interrupt Vector Table (IVT)    │
+0x00400 ├─────────────────────────────────┤
+        │ BIOS Data Area                  │
+0x00500 ├─────────────────────────────────┤  ◄── MEMORY_FAT_ADDR
+        │   "FAT driver" region            │      (see zoom-in below)
+        │   (64KB budget, MEMORY_FAT_SIZE) │
+0x10500 ├─────────────────────────────────┤  ◄── end of FAT driver budget
+        │              ...free...          │
+0x20000 ├─────────────────────────────────┤
+        │ stage2 itself: code, stack,      │
+        │ AND the pointer *variables*      │
+        │ g_Data / g_Fat / g_DataSectionLba│
+        │ / g_RootDirectoryEnd live here   │
+0x80000 ├─────────────────────────────────┤
+        │ Extended BIOS Data Area          │
+0xA0000 ├─────────────────────────────────┤
+        │ Video memory / BIOS ROM          │
+0xFFFFF └─────────────────────────────────┘
+```
+
+Zoomed in on `0x00500`–`0x10500` — what the pointer *values* actually point to:
+
+```
+0x00500  g_Data ──────► ┌──────────────────────────────────────┐
+                         │ FAT_Data                              │
+                         │  ├─ BS  (union, 512 bytes)             │
+                         │  │    .BootSectorBytes[512]            │ ← raw boot sector
+                         │  │    .BootSector (named-field view)   │   (same bytes)
+                         │  │                                     │
+                         │  ├─ RootDirectory  (FAT_FileData)      │
+                         │  │    .Public.Handle = -1               │
+                         │  │    .Public.isDirectory = true        │
+                         │  │    .FirstCluster = rootDirLba (disk #)│
+                         │  │    .CurrentCluster                   │
+                         │  │    .CurrentSectorInCluster            │
+                         │  │    .Buffer[512] ← currently-loaded   │
+                         │  │                    root dir sector   │
+                         │  │                                     │
+                         │  └─ OpenedFiles[10]  (FAT_FileData[])  │
+                         │       each slot: same shape as          │
+                         │       RootDirectory above, .Opened flag │
+                         └──────────────────────────────────────┘
+0x00500 + sizeof(FAT_Data)
+         g_Fat ────────► ┌──────────────────────────────────────┐
+                         │ FAT table bytes                       │
+                         │ (SectorsPerFat × BytesPerSector)      │
+                         │ — the on-disk FAT, copied in by       │
+                         │   FAT_ReadFat                         │
+                         └──────────────────────────────────────┘
+```
+
+Global pointer/value summary:
+
+| Global | Type | Points to / holds | Lives where (variable itself) |
+|---|---|---|---|
+| `g_Data` | `FAT_Data far*` | `0x00500` — start of the struct above | stage2's data segment (`0x20000`+) |
+| `g_Fat` | `uint8_t far*` | `0x00500 + sizeof(FAT_Data)` — the FAT table bytes | stage2's data segment |
+| `g_DataSectionLba` | `uint32_t` | **not a RAM address** — a disk LBA number (where cluster `2`'s data starts on disk) | stage2's data segment |
+| `g_RootDirectoryEnd` | `uint32_t` | meant to be a sector *count* (root dir size), currently unassigned | stage2's data segment |
+| `g_RootDirectory` | `FAT_DirectoryEntry*` | `NULL` — declared, never used | stage2's data segment |
+
+The key distinction: `g_Data`/`g_Fat` are pointers *into* the `0x500`–`0x10500` region, but the 4-byte pointer variables themselves are ordinary globals sitting in stage2's own segment up at `0x20000`. `g_DataSectionLba`/`g_RootDirectoryEnd` aren't addresses at all — they're disk sector numbers, used as inputs to `FAT_ClusterToLba` and the root-dir-bounds check, never dereferenced as pointers.
+
+---
+
+## 2026-06-20 — FAT_FileData internals, and what FAT_FindFile actually has to do
+
+### How `FAT_FileData` works
+
+- **Public/private split**: `FAT_File` (in `fat.h`) is the opaque handle callers see (`Handle`, `isDirectory`, `Position`, `Size`). `FAT_FileData` (private to `fat.c`) is the real struct, with `FAT_File Public` as its first member — so a `FAT_File far*` and a `FAT_FileData far*` pointing at the same handle share the same address, and the two are cast between freely inside `fat.c`.
+- **`Buffer[SECTOR_SIZE]`** holds exactly *one sector's* worth of the file/directory's data at a time — never the whole thing. A file (or directory) can span many clusters, each cluster many sectors, but only 512 bytes of it are ever in memory at once.
+- **`FirstCluster`** — fixed at open time: where this file/directory's cluster chain begins (or, for root, a special-cased starting LBA — root isn't actually cluster-based).
+- **`CurrentCluster` / `CurrentSectorInCluster`** — together, these say *which* sector of the file is currently sitting in `Buffer`, so you know what to load next once it's consumed.
+- **Two different "advance" rules**, gated by `SectorsPerCluster`:
+  - Still inside the current cluster → increment `CurrentSectorInCluster` and the LBA by 1.
+  - Exhausted the current cluster → look up `CurrentCluster` in the FAT table (`g_Fat`) to get the next cluster number (the FAT is a linked list — each cluster's successor lives in the FAT, not in the data itself), reset `CurrentSectorInCluster` to 0, recompute LBA via `FAT_ClusterToLba`.
+- **Root directory is the exception**: no cluster chain, no FAT lookups — just a fixed run of sectors, so "next" is always `LBA + 1` until the whole fixed-size region has been read.
+
+### What `FAT_FindFile` has to do (high level)
+
+1. Confirm `file` is a directory — searching only makes sense on something whose `Buffer` bytes are actually `FAT_DirectoryEntry` records.
+2. Reinterpret the *currently loaded* sector of `Buffer` as 16 `FAT_DirectoryEntry far*` slots and scan them, skipping deleted (`0xE5`), end-of-directory (`0x00` → stop entirely), and LFN entries — comparing the real 11-byte `Name` field via `memcmp` against the target name.
+3. On a match, **copy** the entry into `*entryOut` (not just reassign the local pointer) and return true.
+4. If the current sector is exhausted without a match, **refill the buffer** with the next sector — root-dir-vs-cluster-chain branching as above — and keep scanning.
+5. Stop and return false at the directory's logical end (root: ran past its fixed sector count; subdirectory: FAT gives an end-of-chain marker).
+
+This needs a `DISK*` parameter (currently missing from the signature) to perform those refill reads, and persisted root-directory-size info (currently computed then discarded in `FAT_Initialize`) to know when to stop for root.
+
+---
+
+## 2026-06-16 — Why ReservedSectors is already an LBA
+
+FAT12 disk layout is linear from LBA 0:
+
+```
+LBA 0                       → boot sector
+LBA 1 … ReservedSectors-1   → additional reserved sectors (if any)
+LBA ReservedSectors         → FAT starts here
+```
+
+`ReservedSectors` is a *count* of sectors at the front of the disk. Because the disk starts at LBA 0, that count is also the starting LBA of the FAT — they're the same number by definition. So you can pass `ReservedSectors` directly to `DISK_ReadSectors` with no conversion.
+
+This only works for the FAT. The root directory requires an explicit calculation because it sits after both the reserved region and all FAT copies:
+
+```c
+uint32_t lba = ReservedSectors + (SectorsPerFat * FatCount);
+```
+
+---
+
+## 2026-06-15 (update 2) — Using a union for dual views of the same memory
+
+A `union` in C makes all members share the same memory location. Size is determined by the largest member. Used in `FAT_Data` to get two views of the boot sector without copying:
+
+```c
+typedef struct {
+    union {
+        uint8_t BootSectorBytes[SECTOR_SIZE];  // raw byte buffer — passed to DISK_ReadSectors
+        FAT_BootSector BootSector;             // struct view — access fields by name after reading
+    } BS;
+} FAT_Data;
+```
+
+`DISK_ReadSectors` writes raw bytes into `BootSectorBytes`. Immediately after, the same 512 bytes are accessible as named struct fields via `BootSector.BytesPerSector`, `BootSector.SectorsPerFat`, etc. No copy, no cast — the union provides both views for free.
+
+---
+
+## 2026-06-15 (update) — Manual memory placement instead of malloc
+
+In the bootloader there's no heap allocator. Instead of `malloc`, memory is managed by placing pointers manually at known offsets within a fixed region:
+
+```c
+g_Data = (FAT_Data far*)MEMORY_FAT_ADDR;           // g_Data starts at a known address
+g_Fat  = (uint8_t far*)g_Data + sizeof(FAT_Data);  // g_Fat starts immediately after
+```
+
+`sizeof(FAT_Data)` returns the byte size of the struct. Casting `g_Data` to `uint8_t far*` (a byte pointer) before adding makes pointer arithmetic advance by bytes, not by `sizeof(FAT_Data)` units. The result is a flat memory region with each section placed at a known offset:
+
+```
+MEMORY_FAT_ADDR
+  ├── [FAT_Data struct]    ← g_Data
+  └── [FAT table bytes]    ← g_Fat  (= g_Data + sizeof(FAT_Data))
+```
+
+---
+
+## 2026-06-15 — FAT layer; uint8_t vs char, and far pointers on struct parameters
+
+### `uint8_t` vs `char` for byte arrays
+
+`uint8_t` and `char` are both single bytes and both work for ASCII. The FAT12 directory entry stores filenames as `uint8_t Name[11]` rather than `char Name[11]` to be explicit that it's a raw fixed-width byte array with no string semantics — no null terminator, no `strlen`, compared with `repe cmpsb cx=11` rather than `strcmp`. The `uint8_t` signals "treat this as bytes", not "treat this as a C string".
+
+---
+
+### Why `FAT_File far*` instead of `FAT_File*`
+
+In the small memory model, a near pointer (`FAT_File*`) assumes the target lives within the current DS segment. `FAT_File far*` is a full 32-bit segment:offset pointer that can reach anywhere in the 1MB address space.
+
+FAT functions like `FAT_Read` and `FAT_ReadEntry` use `far*` because they're general-purpose — they shouldn't constrain where the caller allocates their `FAT_File`. If the caller's `FAT_File` happens to be in a different segment from DS, a near pointer would silently read the wrong memory.
+
+---
+
+## 2026-06-14 (update) — Disk read function; far pointers and cdecl layout
+
+### Watcom far pointer convention
+
+In the small memory model, all pointers are **near** by default — 16-bit offsets relative to DS. A `far*` is a 32-bit segment:offset pair that can address anywhere in the 1MB address space regardless of DS.
+
+When a far pointer is passed as a `_cdecl` argument, Watcom pushes it in two 16-bit halves: **segment first** (higher address), **offset second** (lower address). So to reconstruct it in ASM:
+
+```asm
+mov bx, [bp + 16]   ; segment half
+mov es, bx
+mov bx, [bp + 14]   ; offset half
+                    ; es:bx now holds the full far pointer
+```
+
+This matters for disk reads: INT 13h uses ES:BX as the output buffer address. Using a far pointer lets the caller place the buffer anywhere in RAM, not just within the current DS segment.
+
+---
+
+### `_cdecl` stack layout in 16-bit Watcom
+
+Each argument takes a minimum of 2 bytes. After `push bp; mov bp, sp`, arguments are at:
+
+```
+[bp+0]   saved bp
+[bp+2]   return address
+[bp+4]   first argument
+[bp+6]   second argument
+...
+```
+
+For `x86_Disk_Read(drive, cylinder, head, sector, count, far* dataOut)`:
+
+```
+[bp+4]   drive     (uint8_t,  2 bytes)
+[bp+6]   cylinder  (uint16_t, 2 bytes)
+[bp+8]   head      (uint16_t, 2 bytes)
+[bp+10]  sector    (uint16_t, 2 bytes)
+[bp+12]  count     (uint8_t,  2 bytes)
+[bp+14]  dataOut offset   (far ptr low half)
+[bp+16]  dataOut segment  (far ptr high half)
+```
+
+The shift count for `shr`/`sar` must be in `cl` specifically — no other register works. So loading `count` for a shift: `mov cl, [bp + 12]`.
+
+---
+
 ## 2026-06-14 — Devlog created; stage1 + stage2 working
 
 Created this devlog. At this point stage1 (boot.asm) is fully working and stage2 is running C code with a working `printf` implementation.

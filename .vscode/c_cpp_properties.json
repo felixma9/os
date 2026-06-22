@@ -8,14 +8,31 @@
             "defines": [
                 "_DEBUG",
                 "UNICODE",
+                "_UNICODE",
+                "far="
+            ],
+            "windowsSdkVersion": "10.0.26100.0",
+            "compilerPath": "/WATCOM/binnt64/wcc.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x86",
+            "configurationProvider": "ms-vscode.makefile-tools"
+        },
+        {
+            "name": "wsl",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
                 "_UNICODE"
             ],
             "windowsSdkVersion": "10.0.26100.0",
-            "compilerPath": "/usr/bin/gcc",
+            "compilerPath": "\\\\wsl.localhost\\Ubuntu\\usr\\bin\\gcc",
             "cStandard": "c17",
             "cppStandard": "c++17",
-            "intelliSenseMode": "windows-msvc-x64",
-            "configurationProvider": "ms-vscode.makefile-tools"
+            "intelliSenseMode": "windows-msvc-x64"
         }
     ],
     "version": 4

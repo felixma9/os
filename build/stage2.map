@@ -1,7 +1,7 @@
 Open Watcom Linker Version 2.0 beta Jun  9 2026 05:07:52 (64-bit)
 Copyright (c) 2002-2026 The Open Watcom Contributors. All Rights Reserved.
 Portions Copyright (c) 1985-2002 Sybase, Inc. All Rights Reserved.
-Created on:       26/06/11 15:55:21
+Created on:       26/06/15 23:14:58
 Executable Image: C:\Users\Felix\Documents\GitHub\os\build\stage2.bin
 creating a RAW Binary Image executable
 
@@ -13,7 +13,7 @@ creating a RAW Binary Image executable
 Group                           Address              Size
 =====                           =======              ====
 
-DGROUP                          0000060a             0000007a
+DGROUP                          00000888             0000007a
 
 
 
@@ -25,10 +25,10 @@ Segment                Class          Group          Address         Size
 =======                =====          =====          =======         ====
 
 _ENTRY                 CODE           AUTO           00000000        00000015
-_TEXT                  CODE           AUTO           00000015        000005f5
-CONST                  DATA           DGROUP         0000060a        00000067
-CONST2                 DATA           DGROUP         00000672        00000011
-_DATA                  DATA           DGROUP         00000684        00000000
+_TEXT                  CODE           AUTO           00000015        00000873
+CONST                  DATA           DGROUP         00000888        00000067
+CONST2                 DATA           DGROUP         000008f0        00000011
+_DATA                  DATA           DGROUP         00000902        00000000
 
 
                         +----------------+
@@ -44,16 +44,24 @@ Address        Symbol
 Module: C:\Users\Felix\Documents\GitHub\os\build\stage2\asm\main.obj(C:\Users\Felix\Documents\GitHub\os\build\stage2\asm\main.obj)
 00000000       entry
 Module: C:\Users\Felix\Documents\GitHub\os\build\stage2\asm\x86.obj(C:\Users\Felix\Documents\GitHub\os\build\stage2\asm\x86.obj)
-00000015       _x86_Video_WriteCharTeletype
-00000028       _x86_div64_32
+00000015       __U4D
+0000003c       _x86_Video_WriteCharTeletype
+0000004f       _x86_div64_32
+0000007e       _x86_Disk_Reset
+00000091       _x86_Disk_Read
+000000c8       _x86_Disk_GetDriveParams
+Module: C:\Users\Felix\Documents\GitHub\os\build\stage2\c\disk.obj(C:\Users\Felix\Documents\GitHub\os\build\stage2\c\disk.obj)
+0000010c+      DISK_Initialize_
+00000188+      DISK_LBA2CHS_
+0000023b+      DISK_ReadSectors_
 Module: C:\Users\Felix\Documents\GitHub\os\build\stage2\c\main.obj(C:\Users\Felix\Documents\GitHub\os\build\stage2\c\main.obj)
-00000057       _cstart_
+000002d5       _cstart_
 Module: C:\Users\Felix\Documents\GitHub\os\build\stage2\c\stdio.obj(C:\Users\Felix\Documents\GitHub\os\build\stage2\c\stdio.obj)
-000000c7+      _putc
-000000e5+      _puts
-00000117       _printf
-0000039f+      _printf_number
-00000672+      _g_hexChars
+00000345+      _putc
+00000363+      _puts
+00000395       _printf
+0000061d+      _printf_number
+000008f0+      _g_hexChars
 
 
                         +---------------------+
@@ -69,17 +77,22 @@ Module          Segment               Class           Address         Size
 C:\Users\Felix\Documents\GitHub\os\build\stage2\asm\main.obj
                 _ENTRY                CODE           00000000         00000015
 C:\Users\Felix\Documents\GitHub\os\build\stage2\asm\x86.obj
-                _TEXT                 CODE           00000015         00000042
+                _TEXT                 CODE           00000015         000000f7
+C:\Users\Felix\Documents\GitHub\os\build\stage2\c\disk.obj
+                _TEXT                 CODE           0000010c         000001c9
+                CONST                 DATA           00000888         00000000
+                CONST2                DATA           000008f0         00000000
+                _DATA                 DATA           00000902         00000000
 C:\Users\Felix\Documents\GitHub\os\build\stage2\c\main.obj
-                _TEXT                 CODE           00000057         00000070
-                CONST                 DATA           0000060a         00000067
-                CONST2                DATA           00000672         00000000
-                _DATA                 DATA           00000684         00000000
+                _TEXT                 CODE           000002d5         00000070
+                CONST                 DATA           00000888         00000067
+                CONST2                DATA           000008f0         00000000
+                _DATA                 DATA           00000902         00000000
 C:\Users\Felix\Documents\GitHub\os\build\stage2\c\stdio.obj
-                _TEXT                 CODE           000000c7         00000543
-                CONST                 DATA           00000672         00000000
-                CONST2                DATA           00000672         00000011
-                _DATA                 DATA           00000684         00000000
+                _TEXT                 CODE           00000345         00000543
+                CONST                 DATA           000008f0         00000000
+                CONST2                DATA           000008f0         00000011
+                _DATA                 DATA           00000902         00000000
 Warning! W1014: stack segment not found
 
 
@@ -88,6 +101,6 @@ Warning! W1014: stack segment not found
                         +-----------------------+
 
 Stack size:  0200 (512.)
-Memory size:  0684 (1668.)
+Memory size:  0902 (2306.)
 Entry point address: 00000000
-Link time: 00:00.10
+Link time: 00:00.35
