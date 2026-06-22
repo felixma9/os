@@ -257,48 +257,64 @@ bool FAT_FindFile(DISK* disk, FAT_File far* file, const char* name, FAT_Director
     }
 }
 
-FAT_File* FAT_Open(DISK* disk, const char* path) {
-    char name[MAX_PATH_SIZE];
+void FAT_Close(FAT_File far* file) {
+    return;
+}
 
-    // ignore leading slash
+// Opens a fat file whose name is **given in 8.3 padded form**
+FAT_File* FAT_Open(DISK* disk, const char* path) {
+    char curComponentName[MAX_PATH_SIZE];
+
+    // Ignore leading slash
     if (path[0] == '/') path++;
 
+    // Begin parsing path from root dir
     FAT_File far* parent = NULL;
     FAT_File far* current = &g_Data->RootDirectory.Public;
 
     bool isLast = false;
+
+    // Iterate through all components of path
+    // Open each component, and search for the next part of the path
     while (*path) {
         const char* delim = strchr(path, '/');
+        // Case 1: we haven't reached the final component in path
         if (delim != NULL) {
-            memcpy(name, path, delim - path);
-            name[delim - path + 1] = '\0';
+            memcpy(curComponentName, path, delim - path);
+            curComponentName[delim - path] = '\0';
             path = delim + 1;
         }
+
+        // Case 2: we've reached the final path component
         else {
             unsigned len = strlen(path);
-            memcpy(name, path, len);
-            name[len + 1] = '\0';
+            memcpy(curComponentName, path, len);
+            curComponentName[len] = '\0';
             path += len;
             isLast = true;
         }
 
         // find dir entry in current directory
         FAT_DirectoryEntry entry;
-        if (!FAT_FindFile(disk, current, name, &entry)) {
+        if (!FAT_FindFile(disk, current, curComponentName, &entry)) {
+            FAT_Close(current);
+            printf("FAT: %s not found\r\n", curComponentName);
+            return NULL;
+        } else {
             // check if dir
             if (!isLast && (entry.Attributes & FAT_ATTRIBUTE_DIRECTORY) == 0) {
-                printf("FAT: %s is not a directory!", name);
+                printf("FAT: %s is not a directory!", curComponentName);
                 return NULL;
             }
 
-            // close parent
+            // Close old parent, update parent
+            FAT_Close(parent);
+            parent = current;
             current = FAT_OpenEntry(disk, &entry);
-        } else {
-            FAT_Close(current);
-            printf("FAT: %s not found\r\n", name);
-            return NULL;
         }
+
     }
 
+    FAT_Close(parent);
     return current;
 }
