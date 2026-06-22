@@ -258,7 +258,13 @@ bool FAT_FindFile(DISK* disk, FAT_File far* file, const char* name, FAT_Director
 }
 
 void FAT_Close(FAT_File far* file) {
-    return;
+    // Handle null file and closing root dir cases
+    if (file == NULL) return;
+    if (file->Handle == ROOT_DIRECTORY_HANDLE) return;
+
+    FAT_FileData far* fd = (FAT_FileData far*) file;
+    // No need to do more, since FAT_OpenFileEntry overwrites the first handle with Open == false
+    fd->Opened = false;
 }
 
 // Opens a fat file whose name is **given in 8.3 padded form**
