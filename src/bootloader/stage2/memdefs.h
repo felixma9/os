@@ -8,12 +8,14 @@
 #define MEMORY_MAX      0x00080000
 
 // 0x0000500 - 0x00010500 - FAT driver
-#define MEMORY_FAT_ADDR ((void far*)0x00500000)     // segment:offset (SSSS0000)
-#define MEMORY_FAT_SIZE  0x00010000      // Use 0x00010000 in memory, 64kb
+#define MEMORY_FAT_ADDR ((void far*)0x500000)     // segment:offset (SSSS0000)
+#define MEMORY_FAT_SIZE  0x10000      // Use 0x00010000 in memory, 64kb
 
 // 0x00020000 - 0x00030000 - stage2
 
-// 0x00030000 - 0x00080000 - free
+// 0x00030000 - 0x00080000 - kernel
+#define MEMORY_KERNEL_ADDR ((void far*)0x30000000)  // segment 0x3000, offset 0000
+#define MEMORY_KERNEL_SIZE 0x50000
 
 // 0x00080000 - 0x0009FFFF - extended BIOS data area
 // 0x000A0000 - 0x000C7FFF - video

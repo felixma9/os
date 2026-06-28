@@ -40,9 +40,9 @@ enum FAT_Attributes {
 
 bool FAT_Initialize(DISK* disk);
 FAT_File far* FAT_OpenEntry(DISK* disk, FAT_DirectoryEntry* entry);
-FAT_File* FAT_Open(DISK* disk, const char* path);
+FAT_File far* FAT_Open(DISK* disk, const char* path);
 // Reads file contents into buffer
-uint32_t FAT_Read(DISK* disk, FAT_File far* file, uint32_t byteCount, void* dataOut);
+uint32_t FAT_Read(DISK* disk, FAT_File far* file, uint32_t byteCount, uint8_t far* dataOut);
 bool FAT_IncrementCluster(FAT_File far* file);
 // Advances [file]'s buffer to the next sector on disk
 bool FAT_AdvanceBuffer(DISK* disk, FAT_File far* file);

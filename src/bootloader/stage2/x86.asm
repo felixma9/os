@@ -23,6 +23,26 @@ __U4D:
 
     ret
 
+; U4M (multiplication)
+; in:  dx:ax = first operand (high:low), cx:bx = second operand (high:low)
+; out: dx:ax = 32-bit product (high:low), truncated to 32 bits
+global __U4M
+__U4M:
+    shl edx, 16
+    mov dx, ax
+    mov eax, edx        ; eax = first operand (full 32 bits)
+
+    shl ecx, 16
+    mov cx, bx
+    mov ebx, ecx        ; ebx = second operand (full 32 bits)
+
+    mul ebx             ; edx:eax = eax * ebx (64-bit product); only the low 32 bits (eax) matter here
+
+    mov edx, eax
+    shr edx, 16         ; dx = high 16 bits of the 32-bit product (ax already holds the low 16 bits)
+
+    ret
+
 ;
 ; int 10h ah=0Eh
 ; args: character, page
@@ -94,6 +114,42 @@ _x86_div64_32:
     pop bp
     ret
 
+global _x86_mul64_32
+_x86_mul64_32:
+
+    ; make new call frame
+    push bp             ; save old call frame
+    mov bp, sp          ; init new call frame
+
+    push bx
+
+    ; multiply upper 32 bits
+    mov eax, [bp + 8]   ; eax <- upper 32 b of arg0
+    mov ecx, [bp + 12]  ; ecx <- arg1
+    xor edx, edx
+    mul ecx
+
+    ; store upper 32b of quotient
+    mov ebx, [bp + 16]
+    mov [bx + 4], eax
+
+    ; multiple lower 32 bits
+    mov eax, [bp + 4]   ; eax <- lower 32b of arg0
+                        ; edx <- old remainder
+    mul ecx
+
+    ; store results
+    mov [bx], eax
+    mov bx, [bp + 18]
+    mov [bx], edx
+
+    pop bx
+
+    ; restore old call frame
+    mov sp, bp
+    pop bp
+    ret
+
 ; bool _cdecl x86_Disk_Reset(uint8_t drive);
 global _x86_Disk_Reset
 _x86_Disk_Reset:
@@ -121,6 +177,14 @@ _x86_Disk_Reset:
 ;                           uint8_t count,
 ;                           uint8_t far* dataOut);
 
+; [bp+4]  = drive
+; [bp+6]  = cylinder
+; [bp+8]  = sector
+; [bp+10] = head
+; [bp+12] = count
+; [bp+14] = dataOut (offset half)
+; [bp+16] = dataOut (segment half)
+
 global _x86_Disk_Read
 _x86_Disk_Read:
 
@@ -141,9 +205,9 @@ _x86_Disk_Read:
                         ; so now cl is FEDCBA, shift left 6 to get BAxxxxxx
     shl cl, 6           ; cl = cylinder bits 6-7
 
-    mov dh, [bp + 8]    ; dh = head
+    mov dh, [bp + 10]    ; dh = head
 
-    mov al, [bp + 10]   ; we're using al as an intermediary here, to get upper 2 cylinder bits
+    mov al, [bp + 8]   ; we're using al as an intermediary here, to get upper 2 cylinder bits
     and al, 3Fh         ; 0b00111111, clears top 2 bits of al, now al = FExxxxxx
     or cl, al           ; load the upper two bits into cl
 
@@ -219,6 +283,7 @@ _x86_Disk_GetDriveParams:
     mov [si], cx
 
     mov cl, dh          ; heads = dh
+    inc cx
     mov si, [bp + 12]
     mov [si], cx
 
@@ -232,3 +297,14 @@ _x86_Disk_GetDriveParams:
     mov sp, bp
     pop bp
     ret
+
+; Jump to the address that we loaded kernel to
+global _x86_JumpToKernel
+_x86_JumpToKernel:
+
+    ; Just jump to 0x30000
+    mov ax, 0x3000
+    mov ds, ax
+    mov es, ax
+    mov ss, ax
+    jmp 0x3000:0x0000   ; segment 0x3000, offset 0

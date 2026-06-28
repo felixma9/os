@@ -3,6 +3,7 @@
 
 // Can't call interrupts in C, so these are wrapper functions for assembly code that calls interrupts
 void _cdecl x86_div64_32(uint64_t dividend, uint32_t divisor, uint64_t* quotientOut, uint32_t* remainderOut);
+void _cdecl x86_mul64_32(uint64_t x, uint32_t y, uint64_t* result);
 
 void _cdecl x86_Video_WriteCharTeletype(char c, uint8_t page);
 
@@ -22,3 +23,5 @@ bool _cdecl x86_Disk_GetDriveParams(uint8_t drive,
                                     uint16_t* cylindersOut,
                                     uint16_t* sectorsOut,
                                     uint16_t* headsOut);
+
+void _cdecl x86_JumpToKernel();

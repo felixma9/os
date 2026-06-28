@@ -4,6 +4,26 @@ A running log of what was built, what broke, and what clicked.
 
 ---
 
+## 2026-06-22 — Where `bootDrive` actually comes from
+
+`cstart_(uint16_t bootDrive)`'s argument isn't computed anywhere in C — it's the BIOS's boot drive number, threaded through two assembly hand-offs before it ever reaches C code:
+
+1. **BIOS sets it.** When the BIOS boots a disk, it loads sector 0 into RAM, jumps to it, and leaves that drive's number in `DL` by convention (`0x00` = first floppy, `0x80` = first hard disk, etc.) — free information, not something this code computes.
+2. **Stage1 preserves it.** `boot.asm` never touches `DL` after that point, so it survives the far jump from stage1 to stage2 untouched.
+3. **Stage2 forwards it explicitly.** In `main.asm`:
+   ```asm
+   xor dh, dh      ; zero the upper byte
+   push dx         ; push the (now 16-bit) drive number
+   call _cstart_   ; becomes cstart_'s one argument
+   ```
+   That's the entire origin of `bootDrive` — it's `DL`, widened to 16 bits, passed as a normal `_cdecl` argument.
+
+### Why `DISK_Initialize` needs it
+
+Every disk operation goes through `INT 13h` BIOS calls (`x86_Disk_Read`, `x86_Disk_GetDriveParams`, `x86_Disk_Reset`), all of which require a drive number matching the BIOS's own numbering. Hardcoding `0` would be fragile — there's no guarantee the BIOS booted from drive `0` on every machine/emulator/config. `DISK_Initialize(DISK* disk, uint8_t driveNumber)` stores `bootDrive` into `disk->id` and immediately uses it to query the real drive geometry via `x86_Disk_GetDriveParams(disk->id, ...)` — the same "ask the BIOS, don't hardcode" philosophy already noted in `x86.h`'s comment above that function. From then on, every `DISK_ReadSectors` call uses that stored `disk->id` to know which physical drive to read from.
+
+---
+
 ## 2026-06-21 — LBA formulas, disk order vs. RAM order, and a map of the FAT driver's memory
 
 ### LBA formulas, gathered in one place

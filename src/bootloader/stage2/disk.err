@@ -1,4 +1,0 @@
-stdint.h(15): Warning! W138: No newline at end of file
-disk.h(13): Warning! W138: No newline at end of file
-x86.h(24): Warning! W138: No newline at end of file
-C:\Users\Felix\Documents\GitHub\os\src\bootloader\stage2\disk.c(46): Warning! W138: No newline at end of file

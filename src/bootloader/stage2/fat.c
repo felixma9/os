@@ -3,6 +3,8 @@
 #include "memdefs.h"
 #include "utility.h"
 #include "memory.h"
+#include "string.h"
+#include "x86.h"
 
 #define SECTOR_SIZE             512
 #define MAX_PATH_SIZE           256
@@ -83,7 +85,7 @@ bool FAT_ReadFat(DISK* disk) {
 
 bool FAT_Initialize(DISK* disk) {
     // Assign memory for g_Data
-    g_Data = (FAT_Data far*)MEMORY_FAT_ADDR;
+    g_Data = (FAT_Data far*) MEMORY_FAT_ADDR;
 
     if (!FAT_ReadBootSector(disk)) {
         printf("FAT: read boot sector failed\r\n");
@@ -244,7 +246,7 @@ bool FAT_AdvanceBuffer(DISK* disk, FAT_File far* file) {
 // Search the given dir for the file name, return dir entry
 bool FAT_FindFile(DISK* disk, FAT_File far* file, const char* name, FAT_DirectoryEntry* entryOut) {
     if (!file->isDirectory) {
-        printf("FAT: Calling FAT_FindFile on a non-directory!\r\n");
+        printf("FAT_FindFile: Calling FAT_FindFile on a non-directory!\r\n");
         return false;
     }
 
@@ -255,12 +257,25 @@ bool FAT_FindFile(DISK* disk, FAT_File far* file, const char* name, FAT_Director
         FAT_DirectoryEntry far* end = entries + (SECTOR_SIZE / sizeof(FAT_DirectoryEntry)); // we've hardcoded files to have a buffer of SECTOR_SIZE
         
         for (FAT_DirectoryEntry far* curEntry = entries; curEntry < end; ++curEntry) {
-            if (curEntry->Name[0] == 0x00) return false;    // End of directory, nothing found
+            if (curEntry->Name[0] == 0x00) {
+                // End of directory, nothing found
+                printf("FAT_FileFile: reached end of directory without finding file\r\n");
+                return false;
+            }
             if (curEntry->Name[0] == 0xE5) continue;        // This file has been deleted
             if (curEntry->Attributes & FAT_ATTRIBUTE_LFN) continue;   // This file is a dummy, long file name dir
 
+            char testname[12];
+            for (int i = 0; i < 11; ++i) {
+                testname[i] = curEntry->Name[i];
+            }
+            testname[11] = '\0';
+
+            printf("%s\r\n", testname);
+
+
             if (memcmp(curEntry->Name, name, 11) == 0) {
-                printf("FAT: Found target file %s\r\n", name);
+                printf("FAT_FindFile: Found target file %s\r\n", name);
                 *entryOut = *curEntry;
                 return true;
             }
@@ -268,6 +283,7 @@ bool FAT_FindFile(DISK* disk, FAT_File far* file, const char* name, FAT_Director
 
         // Current sector is exhausted, load the next sector
         if (!FAT_AdvanceBuffer(disk, file)) {
+            printf("FAT_FindFile: failed to find file with name %s\r\n", name);
             return false;   // No more data, file not found
         }
     }
@@ -285,7 +301,7 @@ void FAT_Close(FAT_File far* file) {
 
 
 // Opens a fat file whose name is **given in 8.3 padded form**
-FAT_File* FAT_Open(DISK* disk, const char* path) {
+FAT_File far* FAT_Open(DISK* disk, const char* path) {
     char curComponentName[MAX_PATH_SIZE];
 
     // Ignore leading slash
@@ -320,13 +336,12 @@ FAT_File* FAT_Open(DISK* disk, const char* path) {
         // find dir entry in current directory
         FAT_DirectoryEntry entry;
         if (!FAT_FindFile(disk, current, curComponentName, &entry)) {
-            FAT_Close(current);
-            printf("FAT: %s not found\r\n", curComponentName);
+            printf("FAT_Open: failed to find %s\r\n", curComponentName);
             return NULL;
         } else {
             // check if dir
             if (!isLast && (entry.Attributes & FAT_ATTRIBUTE_DIRECTORY) == 0) {
-                printf("FAT: %s is not a directory!", curComponentName);
+                printf("FAT_Open: %s is not a directory!", curComponentName);
                 return NULL;
             }
 
@@ -344,7 +359,7 @@ FAT_File* FAT_Open(DISK* disk, const char* path) {
 
 
 // Read bytes from file into buffer
-uint32_t FAT_Read(DISK* disk, FAT_File far* file, uint32_t byteCount, void* dataOut) {
+uint32_t FAT_Read(DISK* disk, FAT_File far* file, uint32_t byteCount, uint8_t far* dataOut) {
     FAT_FileData far* fd = (FAT_FileData far*) file;
 
     // Don't read past the end of the file
@@ -352,7 +367,6 @@ uint32_t FAT_Read(DISK* disk, FAT_File far* file, uint32_t byteCount, void* data
         byteCount = file->Size - file->Position;
     }
 
-    uint8_t* u8DataOut = (uint8_t*) dataOut;
     uint32_t bytesRead = 0;
 
     while (byteCount > 0) {
@@ -366,10 +380,10 @@ uint32_t FAT_Read(DISK* disk, FAT_File far* file, uint32_t byteCount, void* data
         uint32_t take = (byteCount < leftInBuffer) ? byteCount : leftInBuffer;
 
         // Copy into buffer starting from FileBuffer[Position]
-        memcpy(u8DataOut, fd->Buffer + offsetInSector, take);
+        memcpy(dataOut, fd->Buffer + offsetInSector, take);
 
         // Increment pointers to prepare for next round of data reading
-        u8DataOut += take;
+        dataOut += take;
         file->Position += take;
         bytesRead += take;
         byteCount -= take;

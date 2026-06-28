@@ -1,7 +1,7 @@
 Open Watcom Linker Version 2.0 beta Jun  9 2026 05:07:52 (64-bit)
 Copyright (c) 2002-2026 The Open Watcom Contributors. All Rights Reserved.
 Portions Copyright (c) 1985-2002 Sybase, Inc. All Rights Reserved.
-Created on:       26/06/15 23:14:58
+Created on:       26/06/27 23:41:55
 Executable Image: C:\Users\Felix\Documents\GitHub\os\build\stage2.bin
 creating a RAW Binary Image executable
 
@@ -13,7 +13,7 @@ creating a RAW Binary Image executable
 Group                           Address              Size
 =====                           =======              ====
 
-DGROUP                          00000888             0000007a
+DGROUP                          0000182e             000002fc
 
 
 
@@ -25,10 +25,11 @@ Segment                Class          Group          Address         Size
 =======                =====          =====          =======         ====
 
 _ENTRY                 CODE           AUTO           00000000        00000015
-_TEXT                  CODE           AUTO           00000015        00000873
-CONST                  DATA           DGROUP         00000888        00000067
-CONST2                 DATA           DGROUP         000008f0        00000011
-_DATA                  DATA           DGROUP         00000902        00000000
+_TEXT                  CODE           AUTO           00000015        00001819
+CONST                  DATA           DGROUP         0000182e        000002d9
+CONST2                 DATA           DGROUP         00001b08        00000011
+_DATA                  DATA           DGROUP         00001b1a        00000004
+_BSS                   BSS            DGROUP         00001b1e        0000000c
 
 
                         +----------------+
@@ -45,23 +46,49 @@ Module: C:\Users\Felix\Documents\GitHub\os\build\stage2\asm\main.obj(C:\Users\Fe
 00000000       entry
 Module: C:\Users\Felix\Documents\GitHub\os\build\stage2\asm\x86.obj(C:\Users\Felix\Documents\GitHub\os\build\stage2\asm\x86.obj)
 00000015       __U4D
-0000003c       _x86_Video_WriteCharTeletype
-0000004f       _x86_div64_32
-0000007e       _x86_Disk_Reset
-00000091       _x86_Disk_Read
-000000c8       _x86_Disk_GetDriveParams
+0000003c       __U4M
+00000059       _x86_Video_WriteCharTeletype
+0000006c       _x86_div64_32
+0000009b*      _x86_mul64_32
+000000ca       _x86_Disk_Reset
+000000dd       _x86_Disk_Read
+00000114       _x86_Disk_GetDriveParams
+00000159       _x86_JumpToKernel
 Module: C:\Users\Felix\Documents\GitHub\os\build\stage2\c\disk.obj(C:\Users\Felix\Documents\GitHub\os\build\stage2\c\disk.obj)
-0000010c+      DISK_Initialize_
-00000188+      DISK_LBA2CHS_
-0000023b+      DISK_ReadSectors_
+00000167       DISK_Initialize_
+000001e3+      DISK_LBA2CHS_
+00000296       DISK_ReadSectors_
+Module: C:\Users\Felix\Documents\GitHub\os\build\stage2\c\fat.obj(C:\Users\Felix\Documents\GitHub\os\build\stage2\c\fat.obj)
+00001b1e+      _g_DataSectionLba
+00000330+      FAT_ReadBootSector_
+00000364+      FAT_ReadFat_
+000003a8       FAT_Initialize_
+000005ea+      FAT_ClusterToLba_
+00000640+      FAT_OpenEntry_
+000007ea+      FAT_IncrementCluster_
+0000089b+      FAT_AdvanceBuffer_
+00000a14+      FAT_FindFile_
+00000b7d+      FAT_Close_
+00000bd2       FAT_Open_
+00000d67       FAT_Read_
+00001b26+      _g_RootDirNumSectors
 Module: C:\Users\Felix\Documents\GitHub\os\build\stage2\c\main.obj(C:\Users\Felix\Documents\GitHub\os\build\stage2\c\main.obj)
-000002d5       _cstart_
+00000f14       _cstart_
+Module: C:\Users\Felix\Documents\GitHub\os\build\stage2\c\memory.obj(C:\Users\Felix\Documents\GitHub\os\build\stage2\c\memory.obj)
+0000103f       memcpy_
+000010b0       memcmp_
 Module: C:\Users\Felix\Documents\GitHub\os\build\stage2\c\stdio.obj(C:\Users\Felix\Documents\GitHub\os\build\stage2\c\stdio.obj)
-00000345+      _putc
-00000363+      _puts
-00000395       _printf
-0000061d+      _printf_number
-000008f0+      _g_hexChars
+00001148+      _putc
+00001166+      _puts
+00001198       _printf
+00001420+      _printf_number
+00001b08+      _g_hexChars
+Module: C:\Users\Felix\Documents\GitHub\os\build\stage2\c\string.obj(C:\Users\Felix\Documents\GitHub\os\build\stage2\c\string.obj)
+0000168b       strchr_
+000016e6+      strcpy_
+0000175a       strlen_
+Module: C:\Users\Felix\Documents\GitHub\os\build\stage2\c\utility.obj(C:\Users\Felix\Documents\GitHub\os\build\stage2\c\utility.obj)
+00001795+      align_
 
 
                         +---------------------+
@@ -77,22 +104,43 @@ Module          Segment               Class           Address         Size
 C:\Users\Felix\Documents\GitHub\os\build\stage2\asm\main.obj
                 _ENTRY                CODE           00000000         00000015
 C:\Users\Felix\Documents\GitHub\os\build\stage2\asm\x86.obj
-                _TEXT                 CODE           00000015         000000f7
+                _TEXT                 CODE           00000015         00000152
 C:\Users\Felix\Documents\GitHub\os\build\stage2\c\disk.obj
-                _TEXT                 CODE           0000010c         000001c9
-                CONST                 DATA           00000888         00000000
-                CONST2                DATA           000008f0         00000000
-                _DATA                 DATA           00000902         00000000
+                _TEXT                 CODE           00000167         000001c9
+                CONST                 DATA           0000182e         00000000
+                CONST2                DATA           00001b08         00000000
+                _DATA                 DATA           00001b1a         00000000
+C:\Users\Felix\Documents\GitHub\os\build\stage2\c\fat.obj
+                _TEXT                 CODE           00000330         00000be4
+                CONST                 DATA           0000182e         000001fb
+                CONST2                DATA           00001b08         00000000
+                _DATA                 DATA           00001b1a         00000004
+                _BSS                  BSS            00001b1e         0000000c
 C:\Users\Felix\Documents\GitHub\os\build\stage2\c\main.obj
-                _TEXT                 CODE           000002d5         00000070
-                CONST                 DATA           00000888         00000067
-                CONST2                DATA           000008f0         00000000
-                _DATA                 DATA           00000902         00000000
+                _TEXT                 CODE           00000f14         0000012b
+                CONST                 DATA           00001a2a         000000dd
+                CONST2                DATA           00001b08         00000000
+                _DATA                 DATA           00001b1e         00000000
+C:\Users\Felix\Documents\GitHub\os\build\stage2\c\memory.obj
+                _TEXT                 CODE           0000103f         00000109
+                CONST                 DATA           00001b08         00000000
+                CONST2                DATA           00001b08         00000000
+                _DATA                 DATA           00001b1e         00000000
 C:\Users\Felix\Documents\GitHub\os\build\stage2\c\stdio.obj
-                _TEXT                 CODE           00000345         00000543
-                CONST                 DATA           000008f0         00000000
-                CONST2                DATA           000008f0         00000011
-                _DATA                 DATA           00000902         00000000
+                _TEXT                 CODE           00001148         00000543
+                CONST                 DATA           00001b08         00000000
+                CONST2                DATA           00001b08         00000011
+                _DATA                 DATA           00001b1e         00000000
+C:\Users\Felix\Documents\GitHub\os\build\stage2\c\string.obj
+                _TEXT                 CODE           0000168b         0000010a
+                CONST                 DATA           00001b08         00000000
+                CONST2                DATA           00001b1a         00000000
+                _DATA                 DATA           00001b1e         00000000
+C:\Users\Felix\Documents\GitHub\os\build\stage2\c\utility.obj
+                _TEXT                 CODE           00001795         00000099
+                CONST                 DATA           00001b08         00000000
+                CONST2                DATA           00001b1a         00000000
+                _DATA                 DATA           00001b1e         00000000
 Warning! W1014: stack segment not found
 
 
@@ -101,6 +149,6 @@ Warning! W1014: stack segment not found
                         +-----------------------+
 
 Stack size:  0200 (512.)
-Memory size:  0902 (2306.)
+Memory size:  1b2a (6954.)
 Entry point address: 00000000
-Link time: 00:00.35
+Link time: 00:00.14
