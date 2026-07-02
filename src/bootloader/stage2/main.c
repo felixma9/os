@@ -41,7 +41,7 @@ void _cdecl cstart_(uint16_t bootDrive) {
         return;
     }
 
-    x86_JumpToKernel();
+    x86_EnterProtectedModeAndJumpToKernel();
 
     // Should never reach here
     printf("Something broke!\r\n");

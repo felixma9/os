@@ -24,4 +24,6 @@ bool _cdecl x86_Disk_GetDriveParams(uint8_t drive,
                                     uint16_t* sectorsOut,
                                     uint16_t* headsOut);
 
-void _cdecl x86_JumpToKernel();
+// Enables A20, loads a flat GDT, switches the CPU to 32-bit protected mode,
+// then jumps into the kernel loaded at MEMORY_KERNEL_ADDR. Never returns.
+void _cdecl x86_EnterProtectedModeAndJumpToKernel();

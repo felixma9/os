@@ -298,13 +298,3 @@ _x86_Disk_GetDriveParams:
     pop bp
     ret
 
-; Jump to the address that we loaded kernel to
-global _x86_JumpToKernel
-_x86_JumpToKernel:
-
-    ; Just jump to 0x30000
-    mov ax, 0x3000
-    mov ds, ax
-    mov es, ax
-    mov ss, ax
-    jmp 0x3000:0x0000   ; segment 0x3000, offset 0
