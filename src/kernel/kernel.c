@@ -1,12 +1,24 @@
 #include <stdint.h>
+#include "gdt.h"
 
 #define VGA_BUFFER ((volatile uint16_t*)0xB8000)
 #define VGA_WHITE_ON_BLACK 0x0F
 
-void kernel_main(void) {
-    const char* msg = "Hello world FROM 32-BIT C KERNEL!!!";
-
+void temp_print(const char* msg) {
     for (int i = 0; msg[i] != '\0'; ++i) {
         VGA_BUFFER[i] = ((uint16_t)VGA_WHITE_ON_BLACK << 8) | (uint8_t)msg[i];
     }
 }
+
+void kernel_main() {
+    const char* msg = "Hello world FROM 32-BIT C KERNEL!!!";
+    temp_print(msg);
+    
+    // Initialize the global descriptor table
+    const char* gdtError = "Error, failed to init GDT";
+    if (!init_gdt()) {
+        // Replace with printf call later
+        temp_print(gdtError);
+    }
+}
+
