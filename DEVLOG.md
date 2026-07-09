@@ -4,6 +4,32 @@ A running log of what was built, what broke, and what clicked.
 
 ---
 
+## 2026-07-08 — GDT, IDT, and ISR
+
+### Global Descriptor Table (GDT)
+
+The CPU requires a GDT to enter 32-bit protected mode. In real mode, memory addresses were computed as `segment * 16 + offset`. Protected mode replaces that with a table lookup: each segment register holds a **selector** (an index into the GDT), and each GDT entry describes a region of memory with a base address, a size limit, and permission flags.
+
+In practice we use a **flat model** — both the code and data descriptors have base=0 and limit=4GB, so the segmentation mechanism does nothing meaningful. The GDT is mandatory boilerplate to satisfy the CPU. Real memory protection comes later from paging.
+
+The CPU is told where the GDT lives via the `LGDT` instruction, which loads a 6-byte structure (base address + size) into the GDTR register.
+
+### Interrupt Descriptor Table (IDT)
+
+The IDT is the protected-mode equivalent of the real-mode interrupt vector table. It has up to 256 entries, one per **vector number**. Each entry is a gate descriptor: it holds a handler address and the code segment selector to run the handler in.
+
+When the CPU encounters an exception (divide by zero, page fault, etc.) or hardware interrupt, it looks up the vector number in the IDT and jumps to the registered handler. Without a populated IDT, any fault causes a triple fault and a silent crash. The CPU is told where the IDT lives via `LIDT`, same shape as `LGDT`.
+
+Vectors 0–31 are reserved for CPU exceptions. Vectors 32+ are free for hardware interrupts and syscalls.
+
+### Interrupt Service Routines (ISRs)
+
+An ISR is simply the function that runs when an interrupt fires. Because the CPU doesn't call handlers like normal functions (it jumps there after pushing its own register state), each ISR needs a thin assembly **stub** that bridges the gap: it saves registers, pushes context onto the stack in a known layout, then calls a C dispatcher.
+
+All 32 exception stubs funnel into a single `isr_handler(ISR_Frame*)` function. The `ISR_Frame` struct maps directly onto the saved stack, giving the C handler access to the vector number, error code, and all CPU registers at the time of the fault.
+
+---
+
 ## 2026-06-22 — Where `bootDrive` actually comes from
 
 `cstart_(uint16_t bootDrive)`'s argument isn't computed anywhere in C — it's the BIOS's boot drive number, threaded through two assembly hand-offs before it ever reaches C code:
