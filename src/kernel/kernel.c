@@ -15,10 +15,6 @@ void kernel_main() {
     temp_print(msg);
     
     // Initialize the global descriptor table
-    const char* gdtError = "Error, failed to init GDT";
-    if (!init_gdt()) {
-        // Replace with printf call later
-        temp_print(gdtError);
-    }
+    init_gdt();
 }
 
