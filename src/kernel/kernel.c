@@ -15,8 +15,8 @@ void kernel_main() {
     const char* msg = "Hello world FROM 32-BIT C KERNEL!!!\n";
     temp_print(msg);
     
-    init_gdt();
-    init_idt();
+    gdt_init();
+    idt_init();
     init_isr();
 }
 

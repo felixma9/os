@@ -15,4 +15,4 @@ typedef struct {
 } __attribute__((packed)) IDT_Descriptor;
 
 void idt_set_gate(uint8_t vector, uint32_t handler);
-void init_idt();
+void idt_init();

@@ -12,7 +12,7 @@ static void set_entry(int i, uint32_t base, uint32_t limit, uint8_t access, uint
     gdt[i].base_high            = (base >> 24) & 0xFF;
 }
 
-void init_gdt() {
+void gdt_init() {
     set_entry(0, 0, 0,       0,    0  );  // null descriptor
     set_entry(1, 0, 0xFFFFF, 0x9A, 0xC);  // kernel code (selector 0x08)
     set_entry(2, 0, 0xFFFFF, 0x92, 0xC);  // kernel data (selector 0x10)

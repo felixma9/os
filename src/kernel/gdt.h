@@ -20,5 +20,5 @@ typedef struct {
 
 // This function calls the lgdt instruction in assembly, which tells the CPU
 // where our global descriptor table is
-void init_gdt();
+void gdt_init();
 void flush_gdt(GDT_Descriptor* descriptor);

@@ -33,6 +33,7 @@ static const char* exception_names[] = {
     "Reserved",
 };
 
+// All interrupts funnel into this function, switch on frame->vector
 void isr_handler(ISR_Frame* frame)
 {
     // Write exception name directly to VGA buffer — no libc available
@@ -44,7 +45,7 @@ void isr_handler(ISR_Frame* frame)
     __asm__ volatile("cli; hlt");
 }
 
-void init_isr()
+void isr_init()
 {
     for (int i = 0; i < 32; i++)
         idt_set_gate((uint8_t)i, isr_stub_table[i]);

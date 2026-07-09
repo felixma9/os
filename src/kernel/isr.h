@@ -10,5 +10,5 @@ typedef struct {
     uint32_t eip, cs, eflags;                          // pushed by CPU
 } __attribute__((packed)) ISR_Frame;
 
-void init_isr();
+void isr_init();
 void isr_handler(ISR_Frame* frame);

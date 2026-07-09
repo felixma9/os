@@ -13,7 +13,7 @@ void idt_set_gate(uint8_t vector, uint32_t handler)
     idt[vector].offset_high = (handler >> 16) & 0xFFFF;
 }
 
-void init_idt()
+void idt_init()
 {
     descriptor.limit = sizeof(idt) - 1;
     descriptor.base  = (uint32_t)idt;
