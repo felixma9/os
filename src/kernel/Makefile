@@ -9,8 +9,8 @@ OBJCOPY32?=i686-elf-objcopy
 
 SOURCES_C   = $(wildcard *.c)
 SOURCES_ASM = $(wildcard *.asm)
-OBJECTS_C   = $(patsubst %.c,   $(BUILD_DIR)/kernel/%.o, $(SOURCES_C))
-OBJECTS_ASM = $(patsubst %.asm, $(BUILD_DIR)/kernel/%.o, $(SOURCES_ASM))
+OBJECTS_C   = $(patsubst %.c,   $(BUILD_DIR)/kernel/c/%.o,   $(SOURCES_C))
+OBJECTS_ASM = $(patsubst %.asm, $(BUILD_DIR)/kernel/asm/%.o, $(SOURCES_ASM))
 
 .PHONY: all kernel clean always
 
@@ -24,14 +24,15 @@ $(BUILD_DIR)/kernel.bin: $(BUILD_DIR)/kernel.elf
 $(BUILD_DIR)/kernel.elf: $(OBJECTS_ASM) $(OBJECTS_C) linker.ld
 	$(LD32) -T linker.ld -ffreestanding -nostdlib -o $@ $(OBJECTS_ASM) $(OBJECTS_C) -lgcc
 
-$(BUILD_DIR)/kernel/%.o: %.c always
+$(BUILD_DIR)/kernel/c/%.o: %.c always
 	$(CC32) $(CFLAGS32) -c $< -o $@
 
-$(BUILD_DIR)/kernel/%.o: %.asm always
+$(BUILD_DIR)/kernel/asm/%.o: %.asm always
 	$(ASM) $(ASMFLAGS) -o $@ $<
 
 always:
-	mkdir -p $(BUILD_DIR)/kernel
+	mkdir -p $(BUILD_DIR)/kernel/c
+	mkdir -p $(BUILD_DIR)/kernel/asm
 
 clean:
 	rm -rf $(BUILD_DIR)/kernel $(BUILD_DIR)/kernel.bin $(BUILD_DIR)/kernel.elf

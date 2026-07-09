@@ -12,13 +12,13 @@
 
 static void outb(uint16_t port, uint8_t val)
 {
-    __asm__ volatile("outb %0, %1" : : "a"(val), "Nd"(port));
+    __asm__ ("outb %0, %1" : : "a"(val), "Nd"(port));
 }
 
 static uint8_t inb(uint16_t port)
 {
     uint8_t val;
-    __asm__ volatile("inb %1, %0" : "=a"(val) : "Nd"(port));
+    __asm__ ("inb %1, %0" : "=a"(val) : "Nd"(port));
     return val;
 }
 
@@ -61,6 +61,7 @@ void pic_init()
 void pic_send_eoi(uint8_t irq)
 {
     if (irq >= 8)
-        outb(PIC2_CMD, PIC_EOI);
-    outb(PIC1_CMD, PIC_EOI);
+        // IRQs 8-15 have both slave and master chips firing to deliver it
+        outb(PIC2_CMD, PIC_EOI);    // tell slave: IRQ handled
+    outb(PIC1_CMD, PIC_EOI);        // tell master: IRQ handled
 }

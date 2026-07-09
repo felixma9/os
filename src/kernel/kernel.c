@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include "gdt.h"
 #include "idt.h"
+#include "isr.h"
+#include "pic.h"
 
 #define VGA_BUFFER ((volatile uint16_t*)0xB8000)
 #define VGA_WHITE_ON_BLACK 0x0F
@@ -12,11 +14,15 @@ void temp_print(const char* msg) {
 }
 
 void kernel_main() {
-    const char* msg = "Hello world FROM 32-BIT C KERNEL!!!\n";
+    const char* msg = "Hello world FROM 32-BIT C KERNEL!!!";
     temp_print(msg);
     
     gdt_init();
     idt_init();
-    init_isr();
+    pic_init();
+    isr_init();
+
+    // Enable interrupts
+    __asm__ volatile ("sti");
 }
 
