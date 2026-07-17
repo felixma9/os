@@ -24,6 +24,11 @@ bool _cdecl x86_Disk_GetDriveParams(uint8_t drive,
                                     uint16_t* sectorsOut,
                                     uint16_t* headsOut);
 
+// Queries the BIOS memory map (INT 0x15/E820) and writes it to physical 0x500:
+//   uint32_t count followed by count entries of { uint64_t base, uint64_t length, uint32_t type }.
+// Must be called before entering protected mode (BIOS is unreachable after that).
+void _cdecl x86_GetMemoryMap();
+
 // Enables A20, loads a flat GDT, switches the CPU to 32-bit protected mode,
 // then jumps into the kernel loaded at MEMORY_KERNEL_ADDR. Never returns.
 void _cdecl x86_EnterProtectedModeAndJumpToKernel();

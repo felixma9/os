@@ -242,6 +242,57 @@ _x86_Disk_Read:
 ;                                     uint16_t* cylindersOut,
 ;                                     uint16_t* sectorsOut,
 ;                                     uint16_t* headsOut);
+; void _cdecl x86_GetMemoryMap();
+; Calls INT 0x15/E820 to query the BIOS memory map, storing results at
+; physical 0x500 so the kernel can read them after the mode switch:
+;   [0x500]  uint32_t count          -- number of valid entries
+;   [0x504]  entry[0..count-1]       -- each entry is 20 bytes:
+;              uint64_t base
+;              uint64_t length
+;              uint32_t type         -- 1 = usable RAM
+; The FAT driver previously owned this region; by the time this is called
+; FAT_Read has finished and the space is free to repurpose.
+global _x86_GetMemoryMap
+_x86_GetMemoryMap:
+    push bp
+    mov bp, sp
+    push es
+    push bx
+    push di
+    push si
+
+    xor ax, ax
+    mov es, ax                      ; ES = 0x0000 → ES:DI addresses physical memory
+    mov dword [es:0x500], 0         ; zero out the entry count
+
+    xor ebx, ebx                    ; EBX = 0 starts the e820 query
+    mov di, 0x504                   ; first entry goes at physical 0x504
+
+.e820_loop:
+    mov eax, 0xE820
+    mov ecx, 20                     ; entry size
+    mov edx, 0x534D4150             ; 'SMAP' signature
+    int 0x15
+    jc .e820_done                   ; CF set = unsupported or end of list
+    cmp eax, 0x534D4150             ; BIOS must echo 'SMAP'
+    jne .e820_done
+
+    inc dword [es:0x500]            ; count++
+    add di, 20                      ; advance to next entry slot
+
+    test ebx, ebx                   ; EBX = 0 after last entry
+    jz .e820_done
+    jmp .e820_loop
+
+.e820_done:
+    pop si
+    pop di
+    pop bx
+    pop es
+    mov sp, bp
+    pop bp
+    ret
+
 global _x86_Disk_GetDriveParams
 _x86_Disk_GetDriveParams:
 
