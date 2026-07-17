@@ -4,6 +4,36 @@ A running log of what was built, what broke, and what clicked.
 
 ---
 
+## 2026-07-17 — Paging and Identity Mapping
+
+Paging makes the CPU translate every memory access through a two-level table lookup before it hits RAM. A **page directory** (1024 entries) points to **page tables** (each 1024 entries), and each page table entry points to a 4KB physical frame. The CPU uses bits 31-22 of a virtual address to index the page directory, bits 21-12 to index the page table, and bits 11-0 as the byte offset within the frame. The virtual address is never stored anywhere — it's implicit in the position of the entry.
+
+Turning on paging is done by loading CR3 with the physical address of the page directory, then setting the PG bit in CR0. The moment that bit flips, every pointer the CPU sees is treated as virtual. If the kernel's addresses have no mapping, the CPU immediately page faults and crashes.
+
+**Identity mapping** is how you safely make the transition. You set up a page table where entry `i` points to physical frame `i` — so virtual address X maps to the same physical address X. The kernel is at `0x30000`, which falls within the first 4MB covered by one page table (entries 0-1023, covering `0x000000`-`0x3FFFFF`). By filling all 1024 entries with `frame = i`, `present = 1`, `read_write = 1`, every address the kernel is already using remains valid after paging is enabled. The page table doesn't know it's covering the kernel — it's just that the kernel happens to live within the range it covers.
+
+---
+
+## 2026-07-16 — Physical Memory Manager (PMM)
+
+The kernel has no idea what RAM is available to use. The CPU is in 32-bit flat mode — every pointer is a raw physical address — but that doesn't mean every address is safe. The BIOS surveys the machine's RAM layout and makes it available via INT 0x15/E820, a list of memory regions each tagged with a type (usable, reserved, ACPI, bad, etc.). Since this is a BIOS call, it can only be made in real mode — so stage2 collects the map before the mode switch and stores it at physical `0x500`, where the kernel picks it up.
+
+The PMM tracks which 4KB **pages** of physical RAM are free using a **bitmap** — one bit per page, 0 = free, 1 = used. For 128MB of RAM that's 32,768 pages = 4KB of bitmap. Two operations:
+
+- `pmm_alloc_page()` — scan for a free bit, mark it used, return the physical address
+- `pmm_free_page(addr)` — clear the bit
+
+Initialization (`pmm_init`) runs in three passes:
+1. **Mark everything used** — conservative default.
+2. **Walk the e820 map** — for each usable region, free those pages.
+3. **Re-mark known-reserved regions** — IVT/BDA, stage2, the kernel itself, and the bitmap's own pages.
+
+The bitmap lives immediately after `_kernel_end` (a linker symbol marking the end of the kernel binary), 4KB-aligned. No hardcoded address needed.
+
+Everything downstream depends on the PMM: paging needs it to allocate page tables, the kernel heap needs it to get memory to carve up, and process creation needs it to hand pages to user programs.
+
+---
+
 ## 2026-07-08 — GDT, IDT, and ISR
 
 ### Global Descriptor Table (GDT)

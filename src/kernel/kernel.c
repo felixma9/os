@@ -4,6 +4,7 @@
 #include "isr.h"
 #include "pic.h"
 #include "pmm.h"
+#include "paging.h"
 
 #define VGA_BUFFER ((volatile uint16_t*)0xB8000)
 #define VGA_WHITE_ON_BLACK 0x0F
@@ -23,6 +24,7 @@ void kernel_main() {
     pic_init();
     isr_init();
     pmm_init();
+    paging_init();
 
     // Enable interrupts
     __asm__ volatile ("sti");
